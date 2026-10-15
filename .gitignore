@@ -1,0 +1,6 @@
+# Alteryx and Excel temporary files
+*.bak
+~$*
+*.yxmd.bak
+Thumbs.db
+.DS_Store
