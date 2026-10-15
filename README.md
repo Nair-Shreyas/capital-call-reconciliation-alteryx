@@ -1,5 +1,13 @@
 # Capital Call Cash Reconciliation in Alteryx
 
+![Project Overview](images/0_project_overview.png)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Built_with-Alteryx_Designer-0078C0?style=flat-square" alt="Built with: Alteryx Designer"/>
+  <img src="https://img.shields.io/badge/Domain-Private_fund_administration-6E6E6E?style=flat-square" alt="Domain: Private fund administration"/>
+  <img src="https://img.shields.io/badge/Data-Fictional_capital_call-c9440c?style=flat-square" alt="Data: Fictional capital call"/>
+</p>
+
 An Alteryx Designer workflow that reconciles a private fund's **capital call** against the **bank receipts**. It classifies every investor as matched, short-paid, outstanding or unidentified, and ties the totals back to source so nothing is lost or double-counted.
 
 Built as a hands-on learning project in private fund administration. All data is fictional.
@@ -57,6 +65,10 @@ flowchart LR
 | 6 | Union + Formula | Recombines all three outputs and assigns each row a status, applying a €25 tolerance for bank charges and counting days overdue from the run date |
 | 7 | Select + Output | Writes a clean detail sheet and a summary sheet by status for the reviewer |
 
+The Join on `Investor_ID` is where the reconciliation happens. Its three outputs separate paid investors (J), called investors with no cash (L) and cash with no matching investor (R):
+
+![Join configuration](images/join_configuration.png)
+
 ## Seeded exceptions
 
 Five problems were planted in the test data, plus one split payment to test aggregation. The workflow handles all six correctly.
@@ -103,7 +115,8 @@ Five problems were planted in the test data, plus one split payment to test aggr
 │   └── bank_receipts.csv     bank statement export
 ├── output/
 │   └── recon_results.xlsx    Recon (detail) and Summary sheets
-└── images/                   screenshots
+├── images/                   cover image and screenshots
+└── LICENSE
 ```
 
 ## Next steps
@@ -112,6 +125,9 @@ Five problems were planted in the test data, plus one split payment to test aggr
 - **Align the Union inputs:** the Join's three outputs have different columns, which raises informational warnings. A Select on each branch would remove them.
 - **Parameterise:** make the tolerance, the as-of date and the call notice user inputs instead of fixed values.
 - **Investor-level detail:** show the side-letter terms and each investor's unfunded commitment after the call.
+
+## Tech
+Alteryx Designer (`.yxmd`), RegEx parsing, Excel output
 
 ## Disclaimer
 
