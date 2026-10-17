@@ -19,6 +19,7 @@ A fund has asked its 12 investors for **€25 million**. The bank statement show
 | Who paid nothing? | 1 investor, €1,200,000 outstanding and counted as days overdue |
 | Is there cash we can't identify? | 1 receipt of €750,000 with no investor reference, flagged before booking |
 | Do the totals tie out? | Yes: €25,000,000 called ties to the call notice, €24,049,985 received ties to the bank statement |
+| What happens next? | Cash is booked against each investor's receivable, shortfalls are chased under the LPA, and unidentified cash is held in suspense until the payer is identified and cleared |
 
 The workflow runs in one click and writes a reviewer-ready Excel file with a detail sheet and a summary sheet. Built as a hands-on learning project in private fund administration. All data is fictional.
 
@@ -32,6 +33,7 @@ The workflow runs in one click and writes a reviewer-ready Excel file with a det
 - [The scenario](#the-scenario)
 - [What makes the data hard](#what-makes-the-data-hard)
 - [Results and control check](#results-and-control-check)
+- [What gets booked, and what gets followed up](#what-gets-booked-and-what-gets-followed-up)
 - [Inside the workflow](#inside-the-workflow)
 - [Key configurations](#key-configurations)
 - [Design decisions](#design-decisions)
@@ -80,11 +82,37 @@ Real reconciliation data is messy, so six problems were planted in the sample fi
 | Break: amount differs | 1 | 2,000,000 | 1,500,000 | −500,000 |
 | Outstanding: no cash received | 1 | 1,200,000 | 0 | −1,200,000 |
 | Unidentified receipt | 1 | 0 | 750,000 | 750,000 |
-| **Total** | **12 + 1 receipt** | **25,000,000** | **24,049,985** | **−950,015** |
+| **Total** | **12 + 1 receipt** | **25,000,000** | **24,049,985** | see bridge below |
 
 **Control check:** total called (€25,000,000) ties to the call notice, and total received (€24,049,985) ties to the bank statement. Every euro on both sides appears exactly once in the output, so nothing was dropped by the join or double-counted by the aggregation.
 
+The two totals are bridged gross rather than netted. Netting the €750,000 of unidentified cash against investor shortfalls would show a single −€950,015 and hide both problems:
+
+| Bridge from called to bank | € |
+| --- | --- |
+| Total called (call notice CC-003) | 25,000,000 |
+| Less: Foyle Capital Partners short-paid | (500,000) |
+| Less: Inishmore Holdings not received | (1,200,000) |
+| Less: Lough Derg Insurance bank charges | (15) |
+| **Received from identified investors** | **23,299,985** |
+| Add: unidentified receipt (Harbour Point Family Office) | 750,000 |
+| **Total per bank statement** | **24,049,985** |
+
 ![Input files and reconciliation output](images/inputs_and_results.png)
+
+## What gets booked, and what gets followed up
+
+The reconciliation decides the accounting. This assumes the call was booked when the notice went out (Dr Capital call receivable, Cr Partners' capital: contributions), so each receipt now clears that receivable.
+
+| Status | Accounting entry | Follow-up |
+| --- | --- | --- |
+| Matched (9 investors) | Dr Cash, Cr Capital call receivable, for the full amount | None; receivable cleared |
+| Within tolerance (INV-0011) | Dr Cash €2,199,985, Cr Capital call receivable €2,199,985 | Treat the €15 under the fund's policy: absorb as a bank charge or recover from the investor. The tolerance flags it; the policy decides it |
+| Break (INV-0006) | Dr Cash €1,500,000, Cr Capital call receivable €1,500,000; €500,000 stays as a receivable | Contact the investor, apply the LPA's late-payment interest terms, escalate if unresolved |
+| Outstanding (INV-0009) | No entry; €1,200,000 stays as a receivable | Chase immediately. If unpaid after the LPA's cure period, the default provisions apply; escalate to the GP |
+| Unidentified (€750,000) | Dr Cash, Cr Unallocated receipts (suspense), €750,000 | Never allocate to an investor on a guess. Identify the payer; complete KYC/AML checks before the cash is applied; return it if there is no valid investor relationship |
+
+Every item outside "Matched" goes to a second person for review (four-eyes) before anything is booked.
 
 ---
 
@@ -174,7 +202,8 @@ Days_Overdue = IIF(IsNull([Received_EUR]) AND !IsNull([Due_Date]),
 - **Keep all three Join outputs.** Using only the J output would quietly drop the unpaid investor (L) and the unidentified cash (R), which are exactly the items a reviewer most needs to see.
 - **Null handling before arithmetic.** Rows from the L and R outputs have nulls on one side. Converting them to 0 first keeps the difference and the summary totals correct.
 - **Status order matters.** The IF chain checks the missing-data cases first, then exact match, then tolerance, so every row lands in exactly one status.
-- **Tolerance uses `Abs()`.** Bank charges usually make a receipt slightly short, but a small overpayment within €25 is also treated as matched rather than raised as a break.
+- **Tolerance uses `Abs()`.** Bank charges usually make a receipt slightly short, but a small overpayment within €25 is also treated as matched rather than raised as a break. The tolerance only stops trivial items being chased; the fund's policy still decides whether a difference is absorbed, recovered or refunded.
+- **Gross, not net, totals.** Shortfalls and unidentified cash are reported separately and bridged, so one can never offset and hide the other.
 - **Relative paths.** Inputs and outputs are referenced relative to the workflow, so it runs on any machine without editing paths.
 
 ## How to run it
@@ -203,7 +232,8 @@ Days_Overdue = IIF(IsNull([Received_EUR]) AND !IsNull([Due_Date]),
 
 - **Automated tie-out:** a Test tool that stops the workflow if total received doesn't equal the bank total, or total called doesn't equal the call notice.
 - **Align the Union inputs:** the Join's three outputs have different columns, which raises informational warnings. A Select on each branch would remove them.
-- **Parameterise:** turn the workflow into an analytic app so the tolerance, as-of date and call notice are user inputs instead of fixed values.
+- **Fixed as-at date:** calculate `Days_Overdue` from a reconciliation date rather than today's date, so a rerun reproduces the same report for the audit trail.
+- **Parameterise:** turn the workflow into an analytic app so the tolerance, as-at date and call notice are user inputs instead of fixed values.
 - **Investor-level detail:** add each investor's unfunded commitment after the call, and any side-letter terms.
 
 ## Tech
